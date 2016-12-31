@@ -15,6 +15,7 @@ object Settings {
     libgdxVersion := (libgdxVersion in LocalProject("all-platforms")).value,
     scalaVersion := (scalaVersion in LocalProject("all-platforms")).value,
     libraryDependencies ++= Seq(
+      "com.lihaoyi" % "ammonite" % "0.7.8" cross CrossVersion.full,
       "com.badlogicgames.gdx" % "gdx" % libgdxVersion.value
     ),
     javacOptions ++= Seq(

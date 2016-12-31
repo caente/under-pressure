@@ -13,7 +13,7 @@ import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.scenes.scene2d.actions.Actions
 import com.badlogic.gdx.scenes.scene2d.Action
 import com.badlogic.gdx.files.FileHandle
-
+import ammonite.ops._
 
 
 class BaseActor(
@@ -43,7 +43,8 @@ class BaseActor(
       batch.draw(region, getX, getY, getOriginX, getOriginY, getWidth, getHeight, getScaleX, getScaleY, getRotation)
   }
 }
-
+case class Point(x:Float, y:Float)
+case class Thirds(top:Rectangle, middle:Rectangle, bottom:Rectangle)
 class Underpressure extends Game {
 
     val entitySize = 60
@@ -55,26 +56,50 @@ class Underpressure extends Game {
     lazy val floor = new BaseActor(new Texture("gray.png"), 0, 0)
 
 
-    def entity(x:Float, y:Float, file:FileHandle) = {
-         val e = new BaseActor(new Texture(file),x,y)
+    def entity(point:Point, file:FileHandle) = {
+         val e = new BaseActor(new Texture(file),point.x,point.y)
          e.setOriginX(e.getWidth/2)
          e.setOriginY(e.getHeight/2)
          e.addAction(Actions.forever(Actions.rotateBy(360,1)))
          e
     }
     lazy val entity1 = entity(
-      x = mainStage.getWidth - internalWidth  - entitySize - 1,
-      y = internalWidth + 1,
+      point = frame.boundary 
+                |> livingSpace 
+                |> horizontalThirds 
+                |> (_.bottom) 
+                |> verticalThirds 
+                |> (_.top) 
+                |> randomPosition,
       file = Gdx.files.internal("sprocket-1-small.png")
       )
 
     lazy val entity2 = entity(
-      x = internalWidth + 1 + entitySize / 2,
-      y = internalWidth + 1,
+      point = frame.boundary 
+                |> livingSpace 
+                |> horizontalThirds 
+                |> (_.bottom) 
+                |> verticalThirds 
+                |> (_.bottom) 
+                |> randomPosition,
       file = Gdx.files.internal("sprocket-2-small.png")
       )
 
     lazy val entities = List(entity1, entity2)
+
+    def horizontalThirds(frame:Rectangle):Thirds = Thirds(
+        bottom = new Rectangle(frame.getX, frame.getY, frame.getWidth, frame.getHeight/3),
+        middle = new Rectangle(frame.getX, frame.getY + frame.getHeight/3, frame.getWidth, frame.getHeight/3),
+        top    = new Rectangle(frame.getX, frame.getY + 2 * frame.getHeight/3, frame.getWidth, frame.getHeight/3)
+      )
+
+    def verticalThirds(frame:Rectangle):Thirds = Thirds(
+        bottom = new Rectangle(frame.getX, frame.getY, frame.getWidth/3, frame.getHeight),
+        middle = new Rectangle(frame.getX + frame.getWidth/3, frame.getY, frame.getWidth/3, frame.getHeight),
+        top    = new Rectangle(frame.getX + 2 * frame.getWidth/3, frame.getY, frame.getWidth/3, frame.getHeight)
+      )
+
+    def randomPosition(frame:Rectangle):Point = Point(frame.getX, frame.getY)
 
     def  livingSpace(frame:Rectangle) = new Rectangle(
       frame.getX + internalWidth, 
