@@ -12,6 +12,7 @@ import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.scenes.scene2d.actions.Actions
 import com.badlogic.gdx.scenes.scene2d.Action
+import com.badlogic.gdx.files.FileHandle
 
 
 
@@ -53,39 +54,50 @@ class Underpressure extends Game {
 
     lazy val floor = new BaseActor(new Texture("gray.png"), 0, 0)
 
-    lazy val entity = {
-         val e = new BaseActor(
-                        texture = new Texture(Gdx.files.internal("sprocket-2-small.png")),
-                        _x =      (mainStage.getWidth - entitySize) / 2,
-                        _y =      internalWidth + 1
-                )
+
+    def entity(x:Float, y:Float, file:FileHandle) = {
+         val e = new BaseActor(new Texture(file),x,y)
          e.setOriginX(e.getWidth/2)
          e.setOriginY(e.getHeight/2)
+         e.addAction(Actions.forever(Actions.rotateBy(360,1)))
          e
     }
+    lazy val entity1 = entity(
+      x = mainStage.getWidth - internalWidth  - entitySize - 1,
+      y = internalWidth + 1,
+      file = Gdx.files.internal("sprocket-1-small.png")
+      )
+
+    lazy val entity2 = entity(
+      x = internalWidth + 1 + entitySize / 2,
+      y = internalWidth + 1,
+      file = Gdx.files.internal("sprocket-2-small.png")
+      )
+
+    lazy val entities = List(entity1, entity2)
 
     def  livingSpace(frame:Rectangle) = new Rectangle(
       frame.getX + internalWidth, 
       frame.getY + internalWidth, 
-      frame.getWidth - internalWidth * 2, 
+      frame.getWidth - internalWidth, 
       frame.getHeight - internalWidth * 2
     )
 
     override def create():Unit =  {
       mainStage.addActor(floor)
       mainStage.addActor(frame)
-      mainStage.addActor(entity)
-      entity.addAction(Actions.forever(Actions.rotateBy(360,1)))
+      mainStage.addActor(entity1)
+      mainStage.addActor(entity2)
       }
 
     var started = false
     override def render():Unit =  {
       if (Gdx.input.isKeyPressed(Keys.ENTER)) started = true
       val speedY = 
-        if (!livingSpace(frame.boundary).contains(entity.boundary) || !started)  0 
+        if (!livingSpace(frame.boundary).contains(entity1.boundary) || !started)  0 
         else   mainStage.getWidth / 7
 
-      entity.velocityY = speedY
+      entity1.velocityY = speedY
       mainStage.act(Gdx.graphics.getDeltaTime)
 
       Gdx.gl.glClearColor(1,1,1,1)
