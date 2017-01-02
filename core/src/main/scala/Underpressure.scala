@@ -38,7 +38,8 @@ case class Entity(
     velocity.x = velocity.x * -1
     velocity.y = velocity.y * -1
   }
-  def collided(e:Rectangle):Boolean = boundary.overlaps(e) 
+  def collidedWith(e:Rectangle):Boolean = boundary.overlaps(e) 
+  def collidedWith(e:Entity):Boolean = boundary.overlaps(e.boundary) 
   override def act(delta: Float):Unit = {
     super.act(delta)
     moveBy(velocity.x * delta, velocity.y * delta)
@@ -73,26 +74,16 @@ class Underpressure extends Game {
     lazy val entity1 = Entity(
       position = frame.boundary 
                 |> livingSpace 
-                |> horizontalThirds 
-                |> (_.top) 
-                |> verticalThirds 
-                |> (_.middle) 
-                |> randomPosition,
+                |> rightPosition,
       file = Gdx.files.internal("sprocket-1-small.png")
       )
 
     lazy val entity2 = Entity(
       position = frame.boundary 
                 |> livingSpace 
-                |> horizontalThirds 
-                |> (_.bottom) 
-                |> verticalThirds 
-                |> (_.middle) 
-                |> randomPosition,
+                |> leftPosition,
       file = Gdx.files.internal("sprocket-2-small.png")
       )
-
-    lazy val entities = List(entity1, entity2)
 
     def topBorder(frame:Rectangle):Rectangle = 
       new Rectangle(frame.getX , frame.getHeight - internalWidth,  frame.getWidth, internalWidth)
@@ -119,12 +110,14 @@ class Underpressure extends Game {
         top    = new Rectangle(frame.getX + 2 * frame.getWidth/3, frame.getY, frame.getWidth/3, frame.getHeight)
       )
 
-    def randomPosition(frame:Rectangle):Vector2 = new Vector2(frame.getX + 1, frame.getY + 1)
+    def randomPosition(frame:Rectangle):Vector2 = new Vector2(frame.getX, frame.getY)
+    def leftPosition(frame:Rectangle):Vector2 = new Vector2(frame.getX, frame.getY)
+    def rightPosition(frame:Rectangle):Vector2 = new Vector2(frame.getWidth, frame.getY)
 
     def  livingSpace(frame:Rectangle) = new Rectangle(
       frame.getX + internalWidth, 
       frame.getY + internalWidth, 
-      frame.getWidth - internalWidth, 
+      frame.getWidth - internalWidth * 3/2, 
       frame.getHeight - internalWidth * 2
     )
 
@@ -135,23 +128,26 @@ class Underpressure extends Game {
       mainStage.addActor(entity2)
       }
 
-    def collidedWithWalls(entity:Entity):Boolean = 
+    def collidedWithWithWalls(entity:Entity):Boolean = 
       (
-        entity.collided(frame.boundary |> topBorder) ||
-          entity.collided(frame.boundary |> bottomBorder) ||
-          entity.collided(frame.boundary |> rightBorder) ||
-          entity.collided(frame.boundary |> leftBorder) 
+        entity.collidedWith(frame.boundary |> topBorder) ||
+          entity.collidedWith(frame.boundary |> bottomBorder) ||
+          entity.collidedWith(frame.boundary |> rightBorder) ||
+          entity.collidedWith(frame.boundary |> leftBorder) 
       )
+
+    def defaultVelocity = new Vector2(0, mainStage.getWidth / 7)
+
+    lazy val entities = List(entity1, entity2)
 
     override def render():Unit =  {
       entities.foreach{
         entity =>
-          if (Gdx.input.isKeyPressed(Keys.ENTER)) entity.velocity = new Vector2(0, -1 * mainStage.getWidth / 7)
-          if (collidedWithWalls(entity)) entity.reverseMovement()
-          entities.filterNot(_ == entity).foreach{
+          if (Gdx.input.isKeyPressed(Keys.ENTER) && entity.velocity.isZero) entity.velocity = defaultVelocity
+          else if (collidedWithWithWalls(entity)) entity.reverseMovement()
+          else entities.filterNot(_ == entity).foreach{
             otherEntity =>
-               if(entity.boundary.overlaps(otherEntity.boundary))
-                 entity.reverseMovement()
+              if(entity.collidedWith(otherEntity)) entity.reverseMovement()
           }
       }
       
