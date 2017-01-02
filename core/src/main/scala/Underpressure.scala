@@ -15,6 +15,7 @@ import com.badlogic.gdx.scenes.scene2d.Action
 import com.badlogic.gdx.files.FileHandle
 import com.badlogic.gdx.math.Intersector
 import com.badlogic.gdx.math.Vector2
+import scalaz.syntax.std.boolean._
 import ammonite.ops._
 
 
@@ -33,11 +34,11 @@ case class Entity(
   var velocity = new Vector2(0, 0)
   def position:Vector2 = new Vector2(getX, getY)
   def boundary  = new Rectangle(getX, getY, getWidth, getHeight)
-  def collided(e:Rectangle):Boolean = boundary.overlaps(e)
   def reverseMovement(): Unit = {
     velocity.x = velocity.x * -1
     velocity.y = velocity.y * -1
   }
+  def collided(e:Rectangle):Boolean = boundary.overlaps(e) 
   override def act(delta: Float):Unit = {
     super.act(delta)
     moveBy(velocity.x * delta, velocity.y * delta)
@@ -73,9 +74,9 @@ class Underpressure extends Game {
       position = frame.boundary 
                 |> livingSpace 
                 |> horizontalThirds 
-                |> (_.bottom) 
-                |> verticalThirds 
                 |> (_.top) 
+                |> verticalThirds 
+                |> (_.middle) 
                 |> randomPosition,
       file = Gdx.files.internal("sprocket-1-small.png")
       )
@@ -86,7 +87,7 @@ class Underpressure extends Game {
                 |> horizontalThirds 
                 |> (_.bottom) 
                 |> verticalThirds 
-                |> (_.bottom) 
+                |> (_.middle) 
                 |> randomPosition,
       file = Gdx.files.internal("sprocket-2-small.png")
       )
@@ -98,6 +99,13 @@ class Underpressure extends Game {
 
     def bottomBorder(frame:Rectangle):Rectangle = 
       new Rectangle(frame.getX , frame.getY,  frame.getWidth, internalWidth)
+
+    def rightBorder(frame:Rectangle):Rectangle = 
+      new Rectangle(frame.getX, frame.getY,  internalWidth, frame.getHeight)
+
+    def leftBorder(frame:Rectangle):Rectangle = 
+      new Rectangle(frame.getWidth , frame.getY,  internalWidth, frame.getHeight)
+
 
     def horizontalThirds(frame:Rectangle):Thirds = Thirds(
         bottom = new Rectangle(frame.getX, frame.getY, frame.getWidth, frame.getHeight/3),
@@ -125,17 +133,28 @@ class Underpressure extends Game {
       mainStage.addActor(frame)
       mainStage.addActor(entity1)
       mainStage.addActor(entity2)
-      println(frame.boundary |> topBorder)
-      println(entity1.position)
-      println(entity1.collided(frame.boundary |> topBorder))
       }
 
-    var started = false
+    def collidedWithWalls(entity:Entity):Boolean = 
+      (
+        entity.collided(frame.boundary |> topBorder) ||
+          entity.collided(frame.boundary |> bottomBorder) ||
+          entity.collided(frame.boundary |> rightBorder) ||
+          entity.collided(frame.boundary |> leftBorder) 
+      )
+
     override def render():Unit =  {
-      started = Gdx.input.isKeyPressed(Keys.ENTER)
-      if (started) entity1.velocity = new Vector2(0, -1 * mainStage.getWidth / 7)
-      if (entity1.collided(frame.boundary |> topBorder)) entity1.reverseMovement()
-      if (entity1.collided(frame.boundary |> bottomBorder)) entity1.reverseMovement()
+      entities.foreach{
+        entity =>
+          if (Gdx.input.isKeyPressed(Keys.ENTER)) entity.velocity = new Vector2(0, -1 * mainStage.getWidth / 7)
+          if (collidedWithWalls(entity)) entity.reverseMovement()
+          entities.filterNot(_ == entity).foreach{
+            otherEntity =>
+               if(entity.boundary.overlaps(otherEntity.boundary))
+                 entity.reverseMovement()
+          }
+      }
+      
       mainStage.act(Gdx.graphics.getDeltaTime)
 
       Gdx.gl.glClearColor(1,1,1,1)
