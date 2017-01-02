@@ -13,37 +13,50 @@ import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.scenes.scene2d.actions.Actions
 import com.badlogic.gdx.scenes.scene2d.Action
 import com.badlogic.gdx.files.FileHandle
+import com.badlogic.gdx.math.Intersector
+import com.badlogic.gdx.math.Vector2
 import ammonite.ops._
 
 
-class BaseActor(
-  val texture:Texture,
-  val _x:Float,
-  val _y:Float
+case class Entity(
+  texture:Texture,
+  _x:Float,
+  _y:Float
 ) extends Actor{
   val region = new TextureRegion(texture)
   setX(_x)
   setY(_y)
   setWidth(texture.getWidth)
   setHeight(texture.getHeight)
-  var velocityX = 0f
-  var velocityY = 0f
-  def boundary  = {
-   val r =  new Rectangle
-   r.set(getX, getY, getWidth, getHeight)
-   r
+  setOriginX(texture.getWidth/2)
+  setOriginY(texture.getHeight/2)
+  var velocity = new Vector2(0, 0)
+  def position:Vector2 = new Vector2(getX, getY)
+  def boundary  = new Rectangle(getX, getY, getWidth, getHeight)
+  def collided(e:Rectangle):Boolean = boundary.overlaps(e)
+  def reverseMovement(): Unit = {
+    velocity.x = velocity.x * -1
+    velocity.y = velocity.y * -1
   }
-  override def act(dt: Float):Unit = {
-    super.act(dt)
-    moveBy(velocityX * dt, velocityY * dt)
+  override def act(delta: Float):Unit = {
+    super.act(delta)
+    moveBy(velocity.x * delta, velocity.y * delta)
   }
-  override def draw(batch:Batch, parentAlpha:Float):Unit = {
-    batch.setColor(getColor.r, getColor.g, getColor.b, getColor.a)
-    if (isVisible)
-      batch.draw(region, getX, getY, getOriginX, getOriginY, getWidth, getHeight, getScaleX, getScaleY, getRotation)
-  }
+  override def draw(batch:Batch, parentAlpha:Float):Unit = 
+    batch.draw(region, getX, getY, getOriginX, getOriginY, getWidth, getHeight, getScaleX, getScaleY, getRotation)
+  
 }
-case class Point(x:Float, y:Float)
+object Entity{
+    def apply(position:Vector2, file:FileHandle) = {
+      val e = new Entity(
+        texture = new Texture(file),
+        _x = position.x,
+        _y = position.y
+      )
+      e.addAction(Actions.forever(Actions.rotateBy(360,1)))
+      e
+    }
+  }
 case class Thirds(top:Rectangle, middle:Rectangle, bottom:Rectangle)
 class Underpressure extends Game {
 
@@ -51,20 +64,13 @@ class Underpressure extends Game {
     val internalWidth = 100
 
     lazy val mainStage = new Stage()
-    lazy val frame = new BaseActor(new Texture("frame-small.png"), 0, 0)
+    lazy val frame = new Entity(new Texture("frame-small.png"), 0, 0)
 
-    lazy val floor = new BaseActor(new Texture("gray.png"), 0, 0)
+    lazy val floor = new Entity(new Texture("gray.png"), 0, 0)
 
 
-    def entity(point:Point, file:FileHandle) = {
-         val e = new BaseActor(new Texture(file),point.x,point.y)
-         e.setOriginX(e.getWidth/2)
-         e.setOriginY(e.getHeight/2)
-         e.addAction(Actions.forever(Actions.rotateBy(360,1)))
-         e
-    }
-    lazy val entity1 = entity(
-      point = frame.boundary 
+    lazy val entity1 = Entity(
+      position = frame.boundary 
                 |> livingSpace 
                 |> horizontalThirds 
                 |> (_.bottom) 
@@ -74,8 +80,8 @@ class Underpressure extends Game {
       file = Gdx.files.internal("sprocket-1-small.png")
       )
 
-    lazy val entity2 = entity(
-      point = frame.boundary 
+    lazy val entity2 = Entity(
+      position = frame.boundary 
                 |> livingSpace 
                 |> horizontalThirds 
                 |> (_.bottom) 
@@ -86,6 +92,12 @@ class Underpressure extends Game {
       )
 
     lazy val entities = List(entity1, entity2)
+
+    def topBorder(frame:Rectangle):Rectangle = 
+      new Rectangle(frame.getX , frame.getHeight - internalWidth,  frame.getWidth, internalWidth)
+
+    def bottomBorder(frame:Rectangle):Rectangle = 
+      new Rectangle(frame.getX , frame.getY,  frame.getWidth, internalWidth)
 
     def horizontalThirds(frame:Rectangle):Thirds = Thirds(
         bottom = new Rectangle(frame.getX, frame.getY, frame.getWidth, frame.getHeight/3),
@@ -99,7 +111,7 @@ class Underpressure extends Game {
         top    = new Rectangle(frame.getX + 2 * frame.getWidth/3, frame.getY, frame.getWidth/3, frame.getHeight)
       )
 
-    def randomPosition(frame:Rectangle):Point = Point(frame.getX, frame.getY)
+    def randomPosition(frame:Rectangle):Vector2 = new Vector2(frame.getX + 1, frame.getY + 1)
 
     def  livingSpace(frame:Rectangle) = new Rectangle(
       frame.getX + internalWidth, 
@@ -113,16 +125,17 @@ class Underpressure extends Game {
       mainStage.addActor(frame)
       mainStage.addActor(entity1)
       mainStage.addActor(entity2)
+      println(frame.boundary |> topBorder)
+      println(entity1.position)
+      println(entity1.collided(frame.boundary |> topBorder))
       }
 
     var started = false
     override def render():Unit =  {
-      if (Gdx.input.isKeyPressed(Keys.ENTER)) started = true
-      val speedY = 
-        if (!livingSpace(frame.boundary).contains(entity1.boundary) || !started)  0 
-        else   mainStage.getWidth / 7
-
-      entity1.velocityY = speedY
+      started = Gdx.input.isKeyPressed(Keys.ENTER)
+      if (started) entity1.velocity = new Vector2(0, -1 * mainStage.getWidth / 7)
+      if (entity1.collided(frame.boundary |> topBorder)) entity1.reverseMovement()
+      if (entity1.collided(frame.boundary |> bottomBorder)) entity1.reverseMovement()
       mainStage.act(Gdx.graphics.getDeltaTime)
 
       Gdx.gl.glClearColor(1,1,1,1)

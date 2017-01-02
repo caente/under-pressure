@@ -1,4 +1,6 @@
 lib/
+.ensime_cache/
+.ensime
 libs/
 target/
 src_managed/
