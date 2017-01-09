@@ -11,21 +11,13 @@ import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.scenes.scene2d.actions.Actions
-import com.badlogic.gdx.scenes.scene2d.Action
 import com.badlogic.gdx.files.FileHandle
-import com.badlogic.gdx.math.Intersector
 import com.badlogic.gdx.math.Vector2
 import scalaz.syntax.std.boolean._
 import ammonite.ops._
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import com.badlogic.gdx.utils.Array
 
-import com.badlogic.gdx.ai.steer.{SteerableAdapter, Steerable}
-import com.badlogic.gdx.ai.steer.proximities.InfiniteProximity
-import com.badlogic.gdx.ai.steer.behaviors.CollisionAvoidance
-import com.badlogic.gdx.ai.steer.SteeringAcceleration
-import com.badlogic.gdx.ai.steer.SteeringBehavior
 import scala.collection.mutable.ListBuffer
 
 class BaseActor(
@@ -65,10 +57,6 @@ class Entity(
   private val self = this
   val goalX = _x + _goal.x
   val goalY = _y + _goal.y
-  def steerable:Steerable[Vector2] = new SteerableAdapter[Vector2](){
-    override def getPosition:Vector2 = self.position
-    override def getLinearVelocity:Vector2 = self.velocity
-  }
   def reverseMovement: Entity = {
     withVelocity(new Vector2(velocity.x * -1, velocity.y * -1))
   }
@@ -113,7 +101,7 @@ class Underpressure extends Game {
                 |> (_.middle)
                 |> leftPosition,
       file = Gdx.files.internal("sprocket-1-small.png"),
-      goal = new Vector2(600, -1000)
+      goal = new Vector2(300, -400)
       )
 
     lazy val entity2 = Entity(
@@ -125,7 +113,7 @@ class Underpressure extends Game {
                 |> (_.middle)
                 |> leftPosition,
       file = Gdx.files.internal("sprocket-2-small.png"),
-      goal = new Vector2(600, 1000)
+      goal = new Vector2(300, 600)
       )
 
     def topBorder(frame:Rectangle):Rectangle = 
@@ -182,13 +170,13 @@ class Underpressure extends Game {
 
     override def render():Unit =  {
      entities.foreach{
-       case entity if entity.goal.isZero =>
-           entity.withVelocity(Vector2.Zero)
-       case entity if collidedWithWithWalls(entity) =>
-           entity.reverseMovement
+       case entity if entity.goal.isZero(20) =>
+            entity.withVelocity(Vector2.Zero)
+       case entity if collidedWithWithWalls(entity) || entities.filterNot(_ == entity).exists(entity.collidedWith)=>
+         entity.velocity.scl(-1.3f)
        case entity =>
             val avoiding = entities.filterNot(_ == entity).collect{
-              case otherEntity if entity.position.dst(otherEntity.position) <= 200  =>
+              case otherEntity if entity.position.dst(otherEntity.position) <= internalWidth * 2  =>
                   (v:Vector2) => v.rotate(0.75f)
               }
             if (avoiding.nonEmpty) avoiding.foldLeft(entity.velocity)((v, f) => f(v))
