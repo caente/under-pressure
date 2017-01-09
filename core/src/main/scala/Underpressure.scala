@@ -17,9 +17,18 @@ import com.badlogic.gdx.math.Intersector
 import com.badlogic.gdx.math.Vector2
 import scalaz.syntax.std.boolean._
 import ammonite.ops._
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
+import com.badlogic.gdx.utils.Array
 
+import com.badlogic.gdx.ai.steer.{SteerableAdapter, Steerable}
+import com.badlogic.gdx.ai.steer.proximities.InfiniteProximity
+import com.badlogic.gdx.ai.steer.behaviors.CollisionAvoidance
+import com.badlogic.gdx.ai.steer.SteeringAcceleration
+import com.badlogic.gdx.ai.steer.SteeringBehavior
+import scala.collection.mutable.ListBuffer
 
-case class Entity(
+class BaseActor(
   texture:Texture,
   _x:Float,
   _y:Float
@@ -34,20 +43,40 @@ case class Entity(
   var velocity = new Vector2(0, 0)
   def position:Vector2 = new Vector2(getX, getY)
   def boundary  = new Rectangle(getX, getY, getWidth, getHeight)
-  def reverseMovement(): Unit = {
-    velocity.x = velocity.x * -1
-    velocity.y = velocity.y * -1
-  }
+  
   def collidedWith(e:Rectangle):Boolean = boundary.overlaps(e) 
   def collidedWith(e:Entity):Boolean = boundary.overlaps(e.boundary) 
   override def act(delta: Float):Unit = {
     super.act(delta)
     moveBy(velocity.x * delta, velocity.y * delta)
   }
+
   override def draw(batch:Batch, parentAlpha:Float):Unit = 
     batch.draw(region, getX, getY, getOriginX, getOriginY, getWidth, getHeight, getScaleX, getScaleY, getRotation)
   
 }
+
+class Entity(
+  texture:Texture,
+  _x:Float,
+  _y:Float
+) extends BaseActor(texture, _x,_y){
+  private val self = this
+  def steerable:Steerable[Vector2] = new SteerableAdapter[Vector2](){
+    override def getPosition:Vector2 = self.position
+    override def getLinearVelocity:Vector2 = self.velocity
+  }
+  def reverseMovement: Entity = {
+    withVelocity(new Vector2(velocity.x * -1, velocity.y * -1))
+  }
+  def withVelocity(v:Vector2) = {
+    velocity = v
+    this
+  }
+
+
+}
+
 object Entity{
     def apply(position:Vector2, file:FileHandle) = {
       val e = new Entity(
@@ -66,21 +95,28 @@ class Underpressure extends Game {
     val internalWidth = 100
 
     lazy val mainStage = new Stage()
-    lazy val frame = new Entity(new Texture("frame-small.png"), 0, 0)
+    lazy val frame = new BaseActor(new Texture("frame-small.png"), 0, 0)
 
-    lazy val floor = new Entity(new Texture("gray.png"), 0, 0)
-
+    lazy val floor = new BaseActor(new Texture("gray.png"), 0, 0)
 
     lazy val entity1 = Entity(
       position = frame.boundary 
                 |> livingSpace 
-                |> rightPosition,
+                |> horizontalThirds
+                |> (_.top)
+                |> verticalThirds
+                |> (_.middle)
+                |> leftPosition,
       file = Gdx.files.internal("sprocket-1-small.png")
       )
 
     lazy val entity2 = Entity(
       position = frame.boundary 
                 |> livingSpace 
+                |> horizontalThirds
+                |> (_.bottom)
+                |> verticalThirds
+                |> (_.middle)
                 |> leftPosition,
       file = Gdx.files.internal("sprocket-2-small.png")
       )
@@ -95,7 +131,7 @@ class Underpressure extends Game {
       new Rectangle(frame.getX, frame.getY,  internalWidth, frame.getHeight)
 
     def leftBorder(frame:Rectangle):Rectangle = 
-      new Rectangle(frame.getWidth , frame.getY,  internalWidth, frame.getHeight)
+      new Rectangle(frame.getWidth  - internalWidth , frame.getY,  internalWidth, frame.getHeight)
 
 
     def horizontalThirds(frame:Rectangle):Thirds = Thirds(
@@ -121,6 +157,8 @@ class Underpressure extends Game {
       frame.getHeight - internalWidth * 2
     )
 
+    lazy val entities = ListBuffer(entity1, entity2)
+
     override def create():Unit =  {
       mainStage.addActor(floor)
       mainStage.addActor(frame)
@@ -138,19 +176,21 @@ class Underpressure extends Game {
 
     def defaultVelocity = new Vector2(0, mainStage.getWidth / 7)
 
-    lazy val entities = List(entity1, entity2)
 
     override def render():Unit =  {
-      entities.foreach{
+     entities.foreach{
         entity =>
-          if (Gdx.input.isKeyPressed(Keys.ENTER) && entity.velocity.isZero) entity.velocity = defaultVelocity
-          else if (collidedWithWithWalls(entity)) entity.reverseMovement()
-          else entities.filterNot(_ == entity).foreach{
-            otherEntity =>
-              if(entity.collidedWith(otherEntity)) entity.reverseMovement()
+          if (Gdx.input.isKeyPressed(Keys.ENTER) && entity.velocity.isZero) entity.withVelocity(defaultVelocity)
+          else if (collidedWithWithWalls(entity)) entity.reverseMovement
+          else {
+            entities.filterNot(_ == entity).foreach{
+              otherEntity =>
+                val distanceToCollision:Float = entity.position.dst(otherEntity.position)
+                if (distanceToCollision <= entity.boundary.getWidth * 6) entity.withVelocity(entity.velocity.rotate(0.75f))
+              }
           }
       }
-      
+
       mainStage.act(Gdx.graphics.getDeltaTime)
 
       Gdx.gl.glClearColor(1,1,1,1)

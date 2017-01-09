@@ -17,7 +17,8 @@ object Settings {
     libraryDependencies ++= Seq(
       "com.lihaoyi" % "ammonite" % "0.7.8" cross CrossVersion.full,
       "org.scalaz" %% "scalaz-core" % "7.2.8",
-      "com.badlogicgames.gdx" % "gdx" % libgdxVersion.value
+      "com.badlogicgames.gdx" % "gdx" % libgdxVersion.value,
+      "com.badlogicgames.gdx" % "gdx-ai" % "1.8.0"
     ),
     javacOptions ++= Seq(
       "-Xlint",
