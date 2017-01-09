@@ -182,17 +182,17 @@ class Underpressure extends Game {
 
     override def render():Unit =  {
      entities.foreach{
-        entity =>
-          if (entity.goal.isZero) entity.withVelocity(Vector2.Zero)
-          else if (collidedWithWithWalls(entity)) entity.reverseMovement
-          else {
+       case entity if entity.goal.isZero =>
+           entity.withVelocity(Vector2.Zero)
+       case entity if collidedWithWithWalls(entity) =>
+           entity.reverseMovement
+       case entity =>
             val avoiding = entities.filterNot(_ == entity).collect{
-              case otherEntity if entity.position.dst(otherEntity.getX, otherEntity.getY) <= 200  =>
+              case otherEntity if entity.position.dst(otherEntity.position) <= 200  =>
                   (v:Vector2) => v.rotate(0.75f)
               }
             if (avoiding.nonEmpty) avoiding.foldLeft(entity.velocity)((v, f) => f(v))
             else entity.withVelocity(entity.goal.cpy.nor.scl(100, 100))
-          }
       }
 
       mainStage.act(Gdx.graphics.getDeltaTime)
