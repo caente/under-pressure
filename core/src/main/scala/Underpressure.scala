@@ -59,9 +59,12 @@ class BaseActor(
 class Entity(
   texture:Texture,
   _x:Float,
-  _y:Float
+  _y:Float,
+  _goal:Vector2
 ) extends BaseActor(texture, _x,_y){
   private val self = this
+  val goalX = _x + _goal.x
+  val goalY = _y + _goal.y
   def steerable:Steerable[Vector2] = new SteerableAdapter[Vector2](){
     override def getPosition:Vector2 = self.position
     override def getLinearVelocity:Vector2 = self.velocity
@@ -69,6 +72,7 @@ class Entity(
   def reverseMovement: Entity = {
     withVelocity(new Vector2(velocity.x * -1, velocity.y * -1))
   }
+  def goal:Vector2 = new Vector2(goalX - getX, goalY - getY)
   def withVelocity(v:Vector2) = {
     velocity = v
     this
@@ -78,11 +82,12 @@ class Entity(
 }
 
 object Entity{
-    def apply(position:Vector2, file:FileHandle) = {
+    def apply(position:Vector2, file:FileHandle, goal:Vector2) = {
       val e = new Entity(
         texture = new Texture(file),
         _x = position.x,
-        _y = position.y
+        _y = position.y,
+        _goal = goal
       )
       e.addAction(Actions.forever(Actions.rotateBy(360,1)))
       e
@@ -107,7 +112,8 @@ class Underpressure extends Game {
                 |> verticalThirds
                 |> (_.middle)
                 |> leftPosition,
-      file = Gdx.files.internal("sprocket-1-small.png")
+      file = Gdx.files.internal("sprocket-1-small.png"),
+      goal = new Vector2(600, -1000)
       )
 
     lazy val entity2 = Entity(
@@ -118,7 +124,8 @@ class Underpressure extends Game {
                 |> verticalThirds
                 |> (_.middle)
                 |> leftPosition,
-      file = Gdx.files.internal("sprocket-2-small.png")
+      file = Gdx.files.internal("sprocket-2-small.png"),
+      goal = new Vector2(600, 1000)
       )
 
     def topBorder(frame:Rectangle):Rectangle = 
@@ -162,8 +169,7 @@ class Underpressure extends Game {
     override def create():Unit =  {
       mainStage.addActor(floor)
       mainStage.addActor(frame)
-      mainStage.addActor(entity1)
-      mainStage.addActor(entity2)
+      entities.foreach(mainStage.addActor)
       }
 
     def collidedWithWithWalls(entity:Entity):Boolean = 
@@ -174,20 +180,18 @@ class Underpressure extends Game {
           entity.collidedWith(frame.boundary |> leftBorder) 
       )
 
-    def defaultVelocity = new Vector2(0, mainStage.getWidth / 7)
-
-
     override def render():Unit =  {
      entities.foreach{
         entity =>
-          if (Gdx.input.isKeyPressed(Keys.ENTER) && entity.velocity.isZero) entity.withVelocity(defaultVelocity)
+          if (entity.goal.isZero) entity.withVelocity(Vector2.Zero)
           else if (collidedWithWithWalls(entity)) entity.reverseMovement
           else {
-            entities.filterNot(_ == entity).foreach{
-              otherEntity =>
-                val distanceToCollision:Float = entity.position.dst(otherEntity.position)
-                if (distanceToCollision <= entity.boundary.getWidth * 6) entity.withVelocity(entity.velocity.rotate(0.75f))
+            val avoiding = entities.filterNot(_ == entity).collect{
+              case otherEntity if entity.position.dst(otherEntity.getX, otherEntity.getY) <= 200  =>
+                  (v:Vector2) => v.rotate(0.75f)
               }
+            if (avoiding.nonEmpty) avoiding.foldLeft(entity.velocity)((v, f) => f(v))
+            else entity.withVelocity(entity.goal.cpy.nor.scl(100, 100))
           }
       }
 
